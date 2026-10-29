@@ -1,27 +1,40 @@
-# EventHive — Student Starter
+# OrderOps — Order Failure, Cancellation & Refund Reconciliation
 
-**Zenith School of AI | Individual Open-Source Evaluation**
+Zenith School of AI | Individual Open-Source Evaluation | Python 3.10+ | Synthetic challenge data only
 
-EventHive is a Python application for managing campus events, registration counts, attendee records and venue capacity.
+Food-delivery operations: order lifecycle, cancellation, idempotency and refund reconciliation.
 
-## Start here
-1. Read STUDENT_PROBLEM_STATEMENT.md.
-2. Use Python 3.10+ and Git.
-3. Run:
-```bash
-python -m pip install -r requirements-dev.txt
-python -m pytest -q
-python -m main
-```
+## Start here — read before coding
 
-The starter contains 110 visible tests: 86 pass and 24 fail on the untouched starter by design. Fix the defects; do not delete, skip, weaken or bypass tests. The final evaluation includes 90 additional private checks, for 200 cases total. Private evaluation material is not included here.
+**Start with the [Student Reading Checklist](STUDENT_START_HERE.md).** It lists the required reading and every deliverable.
 
-## Project map
-- models.py — domain model and field definitions.
-- service.py — JSON storage, search/filtering, status and domain operations.
-- data/records.json — sample records.
-- tests/test_contract.py — visible contract tests.
-- .github/workflows/tests.yml — automated checks on pushes and pull requests.
-- STUDENT_PROBLEM_STATEMENT.md — task, features and rubric.
+- **[Open problem statement PDF](docs/Problem_Statement.pdf)**
+- [Read the full Markdown problem statement](STUDENT_PROBLEM_STATEMENT.md)
+- [Open all student instructions and required-file checklist](STUDENT_START_HERE.md)
 
-Start only when the organiser announces kick-off. Check Actions for the visible test report.
+## Setup
+
+1. Install Python 3.10+ and Git.
+2. Install dependencies: `python -m pip install -r requirements-dev.txt`
+3. Run visible tests: `python -m pytest -q`
+4. Run the offline demo: `python -m main`
+
+Some visible tests are expected to fail on the untouched starter because the required behaviour is incomplete. This is intentional. Never delete, skip, weaken or bypass tests to make the check green.
+
+## Mandatory submission — code plus documentation
+
+Submit one pull request from your fork to this original repository; **do not merge it**. Read [CONTRIBUTING.md](CONTRIBUTING.md) and follow the [pull-request checklist](.github/PULL_REQUEST_TEMPLATE.md).
+
+You must complete all three Markdown documents; they are part of the 100-mark evaluation:
+
+- [`approach.md`](approach.md) — 5 marks
+- [`challenges.md`](challenges.md) — **COMPULSORY**, 5 marks
+- [`optimizations.md`](optimizations.md) — 5 marks
+
+Also submit `TESTING.md` and the challenge-specific notes file named in [the problem statement](STUDENT_PROBLEM_STATEMENT.md). Code alone is not a complete submission. All notes must reflect the work you actually performed.
+
+## Review the whole codebase
+
+Before editing, read the student checklist and inspect the source files, synthetic data, every test under `tests/`, environment/configuration files, and the workflows under `.github/workflows/`. Understand what each file does before changing it.
+
+The starter contains intentionally incomplete behaviour. Fix root causes and preserve the tests. Do not edit CI to evade failures. You must be able to explain your code and may be asked to make a small live modification.
