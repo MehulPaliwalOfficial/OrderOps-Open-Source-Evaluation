@@ -1,4 +1,4 @@
-# Student start here — OrderOps
+# Student start here — EventHive
 
 This file is the reading checklist for this evaluation. Read the linked documents before editing code. You are responsible for understanding the starter code, data, tests and required submission files.
 
