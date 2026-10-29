@@ -1,1 +1,1 @@
-Sample JSON records for EventHive. Do not commit private personal data or secrets.
+OrderOps dataset v2 (all records synthetic): records.json contains 150 internal orders, 163 provider records, 219 event examples and an edge-case catalog. Covers cancellation before/after dispatch, restaurant rejection, duplicate/malformed events, refund bounds, missing-side records and reconciliation mismatches. The main demo uses fixtures.py; records.json is a larger dataset for investigation and additional tests. Not Zomato internal data; no real customer/payment data.
