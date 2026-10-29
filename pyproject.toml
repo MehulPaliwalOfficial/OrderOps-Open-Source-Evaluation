@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eventhive-evaluation-starter"
 version = "1.0.0"
-description = "Campus event registration, capacity and attendee tracking"
+description = "Order lifecycle, cancellation, refund processing and reconciliation"
 requires-python = ">=3.10"
 
 [tool.pytest.ini_options]
