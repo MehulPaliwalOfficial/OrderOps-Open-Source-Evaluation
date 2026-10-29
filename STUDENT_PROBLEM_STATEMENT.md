@@ -1,11 +1,11 @@
-# OrderOps: Order Failure, Cancellation & Refund Reconciliation
+# OrderOps — Zomato-Inspired Order Failure, Cancellation & Refund Reconciliation
 
 **Track:** Food-delivery operations | **Language:** Python 3.10+ | **Time:** 24-hour evaluation
 
 ## Scenario
 A food-delivery platform can confirm payment before the restaurant accepts an order. The restaurant may reject it; customers may cancel before dispatch; and refund notifications can arrive late or more than once. The service must not duplicate a refund or confuse a partial refund with a completed refund.
 
-This is a simulated, offline project inspired by common food-delivery workflows. It is not any company's internal code and does not use real customers or payment APIs.
+This is a simulated, offline project inspired by food-delivery industry workflows, including challenges faced by services such as Zomato. It is not Zomato's internal software, is not affiliated with Zomato, and does not use real customers or payment APIs.
 
 ## Required behaviour
 1. Process the supplied events: payment_confirmed, restaurant_accepted, restaurant_rejected, cancel_requested, dispatch_started, order_delivered and refund_processed.
