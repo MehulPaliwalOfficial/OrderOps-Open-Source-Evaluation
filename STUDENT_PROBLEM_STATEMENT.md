@@ -19,6 +19,14 @@ This is a simulated, offline project inspired by common food-delivery workflows.
 ## Setup
 Run: `python -m pip install -r requirements-dev.txt`, then `python -m pytest -q`, then `python -m main`.
 
+## Repository reading checklist and dataset
+
+Before editing, read `README.md` and `STUDENT_START_HERE.md`, then inspect the whole repository—not only this PDF. Read `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, the test/template documents, `service.py`, `models.py`, `fixtures.py`, `main.py`, every file under `tests/`, and the workflow files under `.github/workflows/`.
+
+The expanded synthetic dataset is in `data/records.json`: **150 internal orders, 163 provider records, and 219 event examples**, plus a reconciliation edge-case catalog. Read `data/README.txt` for its schema and intentional anomalies. It covers cancellation before and after dispatch, restaurant rejection, duplicate or malformed events, refund bounds, provider-only records, and amount/status mismatches. This is simulated industry-inspired data—not Zomato's internal data. The offline demo uses `fixtures.py`; the larger JSON is additional investigation and test material.
+
+Run the baseline tests before editing and record their actual result. Do not delete or weaken tests to make CI green.
+
 ## Work to submit
 - Read the source and run the starter tests before editing.
 - Treat the requirements above as the acceptance contract. Investigate failing tests, trace root causes, and correct the underlying behaviour; do not hard-code fixture output.
