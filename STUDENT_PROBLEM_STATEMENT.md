@@ -66,6 +66,44 @@ Before the deadline, verify each item below. **A code change alone is not a comp
 
 If any item is incomplete, finish it before submitting. Record actual results only; never claim a test passed unless it was run. Follow the individual-work and AI-use policy below.
 
+## Mandatory problem-solving files — submit all three
+
+You must complete **all three files** below in the root of your assigned repository and include them in your pull request. These are required deliverables and together are worth **15 marks** in the evaluation rubric (5 marks each). Start from the provided repository templates, replace the placeholder prompts with your own work, and commit the completed files. A blank template or generic, unsupported text does not count as completion.
+
+### 1. `approach.md` — approach and implementation decisions (5 marks)
+
+Explain your engineering approach in your own words:
+- How you understood the problem and traced the relevant code/data flow.
+- The root cause you identified and the evidence that led you to it.
+- The solution options you considered and why you selected your approach.
+- Important implementation decisions, experiments, and how you validated the fix.
+
+### 2. `challenges.md` — challenges and debugging (5 marks; compulsory)
+
+Record the real challenges you faced while investigating and solving the task:
+- The specific technical issue or obstacle.
+- What you tried, what worked or failed, and how you investigated it.
+- Evidence such as reproduction steps, relevant error/test output, or code references.
+- How you resolved the issue and any remaining limitations.
+
+Do not invent problems or results. If you did not encounter a major obstacle, explain a genuine investigation or tricky edge case you worked through and support it with evidence.
+
+### 3. `optimizations.md` — optimizations and trade-offs (5 marks)
+
+Describe improvements and engineering trade-offs:
+- Which optimizations you considered and which you actually implemented.
+- Why an optimization is useful, with test results or other evidence where possible.
+- Trade-offs, risks, complexity, performance, or maintainability considerations.
+- What you would improve next and why, if more time were available.
+
+### Documentation submission rules
+
+- Use your own words and document work you actually performed; do not copy another student's work.
+- Be concrete and evidence-based. Reference the tests you ran and report their actual outcomes—never claim a test passed unless you ran it.
+- Include all three completed files in the same pull request as your code and tests.
+- **Missing, empty, or materially incomplete files can receive zero for the relevant 5-mark component and may make the submission incomplete.**
+- You must be able to explain your decisions and evidence during the evaluation. This asks for an engineering record, not a private chain-of-thought transcript.
+
 ## Individual-work policy
 AI chatbots, AI coding assistants, generated patches/tests and asking another person to write/debug the solution are prohibited. Ordinary non-AI documentation is allowed. Do not upload challenge code/data to external services. You must be able to explain your code and make a small live change if asked. A code walkthrough can support integrity checks, but no automated detector proves whether AI was used.
 
