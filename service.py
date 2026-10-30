@@ -37,7 +37,7 @@ def apply_order_event(order: dict, event: dict) -> dict:
         out["status"]="OUT_FOR_DELIVERY"
     elif kind=="order_delivered" and out.get("status")=="OUT_FOR_DELIVERY":
         out["status"]="DELIVERED"
-    elif kind == "refund_processed":
+    elif kind == "refund_processed" and event_id is not None:
         amount = event.get("amount_paise")
         refund_due = out.get("refund_due_paise", 0)
         already_refunded = out.get("refunded_paise", 0)

@@ -117,3 +117,19 @@ def test_events_without_event_id_are_processed_independently():
     assert after_acceptance["payment_status"] == "PAID"
     assert after_acceptance["status"] == "ACCEPTED"
     assert after_acceptance["processed_event_ids"] == []
+
+def test_refund_without_event_id_is_ignored():
+    order = new_order("A", 1000, "CANCELLED")
+    order.update(
+        payment_status="PAID",
+        refund_due_paise=1000
+    )
+
+    result = apply_order_event(
+        order,
+        {"type": "refund_processed", "amount_paise": 400}
+    )
+
+    assert result["refunded_paise"] == 0
+    assert result["payment_status"] == "PAID"
+    assert result["processed_event_ids"] == []
