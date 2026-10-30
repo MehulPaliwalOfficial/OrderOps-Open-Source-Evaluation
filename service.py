@@ -66,8 +66,9 @@ def apply_order_event(order: dict, event: dict) -> dict:
     return out
 
 
+
 def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
-    """Compare transaction summaries keyed by order_id."""
+    """Compare internal and provider transaction summaries by order_id."""
     left = {r.get("order_id"): r for r in internal}
     right = {r.get("order_id"): r for r in provider}
 
@@ -89,7 +90,10 @@ def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
         else:
             a, b = left[key], right[key]
 
-            if a.get("amount_paise") != b.get("amount_paise"):
+            internal_amount = a.get("total_paise", a.get("amount_paise"))
+            provider_amount = b.get("amount_paise", b.get("total_paise"))
+
+            if internal_amount != provider_amount:
                 report["amount_mismatches"].append(key)
 
             elif a.get("status") != b.get("status"):
