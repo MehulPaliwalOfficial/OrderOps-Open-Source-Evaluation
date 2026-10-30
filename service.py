@@ -34,11 +34,30 @@ def apply_order_event(order: dict, event: dict) -> dict:
         out["status"]="OUT_FOR_DELIVERY"
     elif kind=="order_delivered" and out.get("status")=="OUT_FOR_DELIVERY":
         out["status"]="DELIVERED"
-    elif kind=="refund_processed":
-        # Bug to find: validate eligibility, positive amount and maximum refund.
-        out["refunded_paise"] += event.get("amount_paise",0)
-        if out["refunded_paise"] >= out.get("refund_due_paise",0):
-            out["payment_status"]="REFUNDED"
+    elif kind == "refund_processed":
+        amount = event.get("amount_paise")
+        refund_due = out.get("refund_due_paise", 0)
+        already_refunded = out.get("refunded_paise", 0)
+
+        eligible = (
+            out.get("status") in ("REJECTED", "CANCELLED")
+            and out.get("payment_status") == "PAID"
+        )
+
+        valid_amount = (
+            type(amount) is int
+            and amount > 0
+            and type(refund_due) is int
+            and type(already_refunded) is int
+            and 0 < refund_due - already_refunded
+            and amount <= refund_due - already_refunded
+        )
+
+        if eligible and valid_amount:
+            out["refunded_paise"] = already_refunded + amount
+
+            if out["refunded_paise"] == refund_due:
+                out["payment_status"] = "REFUNDED"
 
     out["processed_event_ids"].append(event_id)
     return out
