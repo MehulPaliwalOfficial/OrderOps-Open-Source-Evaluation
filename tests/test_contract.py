@@ -102,3 +102,18 @@ def test_reconcile_internal_total_against_provider_amount():
     assert report["matched"] == ["A"]
     assert report["amount_mismatches"] == []
     assert report["status_mismatches"] == []
+
+def test_events_without_event_id_are_processed_independently():
+    order = new_order("A", 100)
+
+    after_payment = apply_order_event(
+        order, {"type": "payment_confirmed"}
+    )
+
+    after_acceptance = apply_order_event(
+        after_payment, {"type": "restaurant_accepted"}
+    )
+
+    assert after_acceptance["payment_status"] == "PAID"
+    assert after_acceptance["status"] == "ACCEPTED"
+    assert after_acceptance["processed_event_ids"] == []

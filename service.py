@@ -16,8 +16,8 @@ def apply_order_event(order: dict, event: dict) -> dict:
     event_id=event.get("event_id")
     kind=event.get("type")
 
-    if event_id in out["processed_event_ids"]:  #Correction
-        return out                              #Correction
+    if event_id is not None and event_id in out["processed_event_ids"]:
+        return out
 
     # Deliberate starter defects: duplicate and invalid refund events are not
     # fully protected, and some transitions need tighter validation.
@@ -62,7 +62,9 @@ def apply_order_event(order: dict, event: dict) -> dict:
             if out["refunded_paise"] == refund_due:
                 out["payment_status"] = "REFUNDED"
 
-    out["processed_event_ids"].append(event_id)
+    if event_id is not None:
+        out["processed_event_ids"].append(event_id)
+
     return out
 
 
