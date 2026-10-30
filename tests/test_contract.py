@@ -87,3 +87,18 @@ def test_reconcile_reports_status_difference():
 
 def test_empty_reconciliation():
     assert all(v==[] for v in reconcile_orders([],[]).values())
+
+
+def test_reconcile_internal_total_against_provider_amount():
+    internal = [
+        {"order_id": "A", "total_paise": 45900, "status": "PLACED"}
+    ]
+    provider = [
+        {"order_id": "A", "amount_paise": 45900, "status": "PLACED"}
+    ]
+
+    report = reconcile_orders(internal, provider)
+
+    assert report["matched"] == ["A"]
+    assert report["amount_mismatches"] == []
+    assert report["status_mismatches"] == []
