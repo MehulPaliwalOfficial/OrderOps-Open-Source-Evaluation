@@ -68,20 +68,34 @@ def apply_order_event(order: dict, event: dict) -> dict:
 
 def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
     """Compare transaction summaries keyed by order_id."""
-    left={r.get("order_id"):r for r in internal}
-    right={r.get("order_id"):r for r in provider}
-    report={"matched":[],"missing_from_provider":[],"missing_from_internal":[],
-            "amount_mismatches":[],"status_mismatches":[]}
-    for key in sorted(set(left)|set(right),key=lambda x:str(x)):
+    left = {r.get("order_id"): r for r in internal}
+    right = {r.get("order_id"): r for r in provider}
+
+    report = {
+        "matched": [],
+        "missing_from_provider": [],
+        "missing_from_internal": [],
+        "amount_mismatches": [],
+        "status_mismatches": [],
+    }
+
+    for key in sorted(set(left) | set(right), key=lambda x: str(x)):
         if key not in right:
             report["missing_from_provider"].append(key)
+
         elif key not in left:
             report["missing_from_internal"].append(key)
+
         else:
-            a,b=left[key],right[key]
+            a, b = left[key], right[key]
+
             if a.get("amount_paise") != b.get("amount_paise"):
                 report["amount_mismatches"].append(key)
-            # Deliberate starter defect: mismatched statuses may be called matched.
+
+            elif a.get("status") != b.get("status"):
+                report["status_mismatches"].append(key)
+
             else:
                 report["matched"].append(key)
+
     return report
