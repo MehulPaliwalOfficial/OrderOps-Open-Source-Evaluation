@@ -2,41 +2,56 @@
 
 ## Test command and environment
 
-- **Python version:** 3.13.13
 - **Test framework:** pytest
-- **Command run:** `python -m pytest -q`
-- **Actual test summary:** `215 passed in 3.66s`
-- **Additional verification:** `python -m main` completed and produced the expected reconciliation output. `git diff --check` reported no whitespace errors.
+- **Command:** `python -m pytest -q`
+- **Latest recorded full-suite result:** `219 passed in 0.69s`
+- **Additional verification:** `git diff --check` produced no output (no whitespace errors).
+- **Demo:** `python -m main` was run during integration verification.
 
 ## Edge-case evidence
 
-| # | Case / input | Expected behaviour | Actual result | Test name or evidence |
-|---|---|---|---|---|
-| 1 | The same payment event is received more than once with the same event ID. | A previously processed event must not be applied again. | Passed; duplicate event processing was prevented. | `payment_event_replay_idempotent` — 20 targeted cases passed. |
-| 2 | A refund event has an invalid amount, including zero, negative, non-integer, or an amount greater than the outstanding refund due. | Invalid refunds must be ignored; the refunded amount must not exceed the outstanding due. | Passed; invalid refund amounts were rejected. | `invalid_refund_amounts_are_ignored`, `refunds_cannot_exceed_due` |
-| 3 | A valid refund is processed in partial and full amounts. | A partial refund must retain the partial-refund state; the order becomes fully refunded only when the full due amount has been processed. | Passed; partial and full refund behaviour was verified. | `valid_partial_and_full_refunds` |
-| 4 | A refund is attempted for an order that is not both paid and rejected or cancelled. | The refund must not be processed unless the order meets the eligibility conditions. | Passed; ineligible refunds were rejected. | `refund_eligibility_matrix` |
-| 5 | Internal and provider records use different amount field names (`total_paise` and `amount_paise`). | Reconciliation must compare the corresponding amounts rather than incorrectly reporting a mismatch. | Passed; matching amounts were reconciled correctly. | `test_reconcile_internal_total_against_provider_amount` |
-| 6 | An event arrives without an event ID. | It must not be treated as a duplicate merely because its ID is missing; missing-ID events must not be recorded as processed IDs. | Passed; independent missing-ID events were processed independently. | `test_events_without_event_id_are_processed_independently` |
-| 7 | A refund event arrives without an event ID. | The refund must be ignored because it cannot be safely deduplicated. | Passed; the refund was ignored. | `test_refund_without_event_id_is_ignored` |
-| 8 | Internal and provider records have matching amounts but different statuses. | Reconciliation must report a status mismatch separately from an amount mismatch. | Passed; the status mismatch was reported. | `python -m main` output and the reconciliation test suite. |
+| # | Case / input | Expected behaviour | Test or implementation evidence |
+|---|---|---|---|
+| 1 | The same event ID is received more than once. | A previously processed event is not applied again. | Existing idempotency coverage in `tests/test_acceptance_matrix.py` and `tests/test_contract.py`. |
+| 2 | An event has an unsupported type. | The order is returned unchanged. | Event-type allow-list in `apply_order_event()`; acceptance-matrix coverage. |
+| 3 | An event ID is empty, whitespace-only, or not a string. | The event is ignored. | Event-ID validation in `apply_order_event()`. |
+| 4 | A non-refund event has no event ID. | It can be processed independently; `None` is not added to the processed-ID list or used to deduplicate other missing-ID events. | `test_events_without_event_id_are_processed_independently`. |
+| 5 | A refund event has no event ID. | The refund is ignored because it cannot be reliably protected against replay. | `test_refund_without_event_id_is_ignored`. |
+| 6 | A refund amount is zero, negative, non-integer, or greater than the outstanding amount. | The refund is ignored and the refunded total is not increased. | Existing refund validation tests in the acceptance matrix and contract suite. |
+| 7 | A valid refund is processed partially and then fully. | Partial refunds keep payment status as `PAID`; status becomes `REFUNDED` only when the full due amount is refunded. | Existing partial/full refund tests. |
+| 8 | A payment confirmation arrives when payment is already not `UNPAID`. | It does not overwrite the existing payment status. | Guard in `apply_order_event()`. |
+| 9 | Internal `total_paise` and provider `amount_paise` contain the same value. | The records are not reported as an amount mismatch. | `test_reconcile_internal_total_against_provider_amount`. |
+| 10 | The preferred amount field exists but is `None`. | Reconciliation falls back to the alternate amount field. | `test_reconcile_falls_back_when_preferred_amount_is_none`. |
+| 11 | Amount and status both differ for the same order. | Both mismatch categories contain the order ID. | `test_reconcile_reports_both_amount_and_status_mismatches`. |
+| 12 | Internal or provider input contains duplicate order IDs. | Reconciliation raises `ValueError` instead of silently overwriting a record in a dictionary. | `test_reconcile_rejects_duplicate_internal_order_ids` and `test_reconcile_rejects_duplicate_provider_order_ids`. |
+| 13 | An order ID is missing or empty. | Reconciliation raises `ValueError`. | Validation in `reconcile_orders()`. |
+| 14 | An order is absent from one side of reconciliation. | It is reported in the corresponding missing-record category. | Existing reconciliation contract and acceptance-matrix tests. |
 
 ## Regression tests added
 
-The following regression tests were added during the implementation:
+The following seven regression tests were added to `tests/test_contract.py`:
 
-- **Duplicate event processing:** Added coverage for replaying a payment event with the same event ID.
-- **Refund validation:** Added coverage for valid partial and full refunds, invalid refund amounts, refund eligibility, and preventing refunds beyond the outstanding due.
-- **Reconciliation amount mapping:** Added `test_reconcile_internal_total_against_provider_amount` to cover the difference between internal `total_paise` and provider `amount_paise` fields.
-- **Missing event IDs:** Added `test_events_without_event_id_are_processed_independently` to ensure missing IDs do not cause unrelated events to be treated as duplicates.
-- **Refund event IDs:** Added `test_refund_without_event_id_is_ignored` to ensure refund events without IDs are not processed.
+- `test_reconcile_internal_total_against_provider_amount`
+- `test_events_without_event_id_are_processed_independently`
+- `test_refund_without_event_id_is_ignored`
+- `test_reconcile_reports_both_amount_and_status_mismatches`
+- `test_reconcile_falls_back_when_preferred_amount_is_none`
+- `test_reconcile_rejects_duplicate_internal_order_ids`
+- `test_reconcile_rejects_duplicate_provider_order_ids`
 
-The complete test suite was run after the implementation changes and reported **215 passed**.
+## Final verification
 
-## Remaining failures or limitations
+The latest recorded full-suite run completed with **219 passed in 0.69s** using:
 
-- No failing tests remained in the final recorded full test-suite run.
-- Events without IDs cannot be reliably deduplicated. The implementation therefore avoids recording missing IDs and rejects refund events without an ID.
-- The full 219-event example dataset was not independently replayed end-to-end as a separate test. Verification is based on the pytest suite and the offline `python -m main` demonstration.
-- No formal performance benchmark was conducted, so no execution-time or memory improvements are claimed.
-- The reconciliation implementation assumes the expected internal and provider record structures; broader malformed-input and schema-validation coverage could be added in future work.
+```powershell
+python -m pytest -q
+```
+
+The changed files also passed `git diff --check` with no reported whitespace errors. The offline demo was run during integration verification.
+
+## Limitations
+
+- The complete 219-event example dataset was not separately replayed end-to-end; verification is based on the automated test suite and the offline demo.
+- No formal performance benchmark was conducted. No execution-time or memory improvement is claimed.
+- Events without IDs cannot be reliably deduplicated. Non-refund events without IDs may be processed independently; refund events without IDs are ignored.
+- Reconciliation validates order IDs and compares the supported amount/status fields; it is not a general schema-validation framework for arbitrary malformed records.
