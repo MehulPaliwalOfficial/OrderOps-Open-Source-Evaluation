@@ -90,6 +90,7 @@ def test_empty_reconciliation():
     assert all(v==[] for v in reconcile_orders([],[]).values())
 
 
+# Regression: compare internal total_paise with provider amount_paise.
 def test_reconcile_internal_total_against_provider_amount():
     internal = [
         {"order_id": "A", "total_paise": 45900, "status": "PLACED"}
@@ -104,6 +105,7 @@ def test_reconcile_internal_total_against_provider_amount():
     assert report["amount_mismatches"] == []
     assert report["status_mismatches"] == []
 
+# Regression: events without IDs must not be mistaken for duplicates.
 def test_events_without_event_id_are_processed_independently():
     order = new_order("A", 100)
 
@@ -119,6 +121,7 @@ def test_events_without_event_id_are_processed_independently():
     assert after_acceptance["status"] == "ACCEPTED"
     assert after_acceptance["processed_event_ids"] == []
 
+# Regression: an unidentifiable refund must not be processed.
 def test_refund_without_event_id_is_ignored():
     order = new_order("A", 1000, "CANCELLED")
     order.update(
@@ -135,6 +138,7 @@ def test_refund_without_event_id_is_ignored():
     assert result["payment_status"] == "PAID"
     assert result["processed_event_ids"] == []
 
+# Regression: report amount and status differences for the same order.
 def test_reconcile_reports_both_amount_and_status_mismatches():
     internal = [
         {
@@ -158,6 +162,7 @@ def test_reconcile_reports_both_amount_and_status_mismatches():
     assert result["status_mismatches"] == ["ORD-105"]
     assert result["matched"] == []
 
+# Regression: use the alternate amount field when the preferred field is None.
 def test_reconcile_falls_back_when_preferred_amount_is_none():
     internal = [
         {
@@ -184,6 +189,7 @@ def test_reconcile_falls_back_when_preferred_amount_is_none():
 import pytest
 
 
+# Regression: duplicate IDs in internal records must be rejected.
 def test_reconcile_rejects_duplicate_internal_order_ids():
     internal = [
         {"order_id": "ORD-1", "total_paise": 1000, "status": "PLACED"},
@@ -194,6 +200,7 @@ def test_reconcile_rejects_duplicate_internal_order_ids():
         reconcile_orders(internal, [])
 
 
+# Regression: duplicate IDs in provider records must be rejected.
 def test_reconcile_rejects_duplicate_provider_order_ids():
     provider = [
         {"order_id": "ORD-1", "amount_paise": 1000, "status": "PLACED"},
