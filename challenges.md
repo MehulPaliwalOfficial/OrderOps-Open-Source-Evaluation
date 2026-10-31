@@ -2,11 +2,11 @@
 
 ## 1. Challenge or confusing behaviour
 
-The most confusing issue was reconciliation reporting amount mismatches for records that appeared to have matching amounts. I also investigated how events without an `event_id` were handled, particularly when processing refunds.
+The main investigation involved reconciliation reporting amount mismatches for records whose amounts appeared to match. Other issues involved event replay protection, missing or malformed event IDs, refund eligibility and limits, and ambiguous reconciliation records.
 
 ## 2. Evidence
 
-The initial demo output showed:
+The initial demo output recorded during investigation was:
 
 ```text
 matched: []
@@ -16,34 +16,55 @@ amount_mismatches: ['ORD-101', 'ORD-102']
 status_mismatches: []
 ```
 
-On inspecting the fixtures, I found that internal records used `total_paise`, whereas provider records used `amount_paise`.
+Inspection of the fixtures showed that internal records used `total_paise`, whereas provider records used `amount_paise`.
 
-Another issue was that missing event IDs were represented by `None` in the processed event list, causing unrelated events without IDs to be treated as duplicates.
+I also found that treating `None` as a normal event ID could cause unrelated events without IDs to be treated as duplicates. Refund events without IDs needed separate handling because they affect financial state and cannot be reliably protected against replay without an identifier.
 
-## 3. What I tried
+## 3. What I investigated
 
-- Ran the demo using `python -m main` and examined its reconciliation output.
-- Inspected `fixtures.py`, `models.py` and `service.py` to understand how internal and provider records were constructed.
-- Compared the amount fields used by both sources.
-- Ran targeted pytest selections while fixing refund validation and event idempotency.
-- Added regression tests for different amount field names and events without IDs.
+- Ran `python -m main` and inspected the reconciliation output.
+- Inspected `fixtures.py`, `models.py`, and `service.py` to understand how records and events were represented.
+- Compared the amount fields used by internal and provider records.
+- Ran targeted pytest selections while investigating idempotency and refund validation.
+- Added regression tests for amount-field mapping, independent events without IDs, refunds without IDs, independent mismatch reporting, fallback fields, and duplicate order IDs.
+- Ran the complete test suite after the changes.
 
 ## 4. Resolution
 
-I updated `reconcile_orders()` in `service.py` to compare `total_paise` from internal records with `amount_paise` from provider records, while retaining fallback compatibility.
+### Event processing
 
-I also changed event ID handling so missing IDs are not stored or treated as duplicate identifiers. Since refunds involve financial state, I additionally required refund events to have an event ID.
+The event processor now accepts only the seven supported event types. Empty, whitespace-only, and non-string non-None event IDs are rejected. Identified events are checked against `processed_event_ids` to prevent replay.
 
-These changes addressed the underlying causes rather than suppressing test failures.
+Non-refund events without IDs can be processed independently; missing IDs are not recorded as processed IDs. Refund events without IDs are ignored because they cannot be reliably deduplicated.
 
-## 5. Proof and regression prevention
+Payment confirmation only changes payment status when it is currently `UNPAID`. Refund processing also checks that a positive refundable balance remains before accepting another refund.
 
-The regression test `test_reconcile_internal_total_against_provider_amount()` verifies the amount-field mapping.
+### Refund validation
 
-The tests `test_events_without_event_id_are_processed_independently()` and `test_refund_without_event_id_is_ignored()` cover missing-ID behaviour.
+Refunds are restricted to paid orders in `REJECTED` or `CANCELLED` states. The amount must be a positive integer and cannot exceed the outstanding refund due. A partial refund leaves payment status as `PAID`; status becomes `REFUNDED` only when the full due amount is processed.
 
-The final full test suite completed with **215 passed**. The demo also produced the expected reconciliation categories, with ORD-101 matched and ORD-102 reported as a status mismatch.
+### Reconciliation
 
-## 6. Unresolved challenge or next step
+The reconciliation function now reads `total_paise` from internal records and `amount_paise` from provider records, falling back to the alternate field when the preferred value is `None`.
 
-Events without IDs cannot be reliably deduplicated because there is no unique identifier to track their replay. I currently allow independent non-financial events without IDs but reject refund events without them. A future improvement would be to investigate event validation at ingestion and require unique identifiers for all financial events.
+Amount and status mismatches are reported independently. Records are marked matched only when both agree. Missing/empty and duplicate order IDs raise `ValueError` before lookup dictionaries are constructed.
+
+## 5. Regression prevention and proof
+
+Seven regression tests were added:
+
+- `test_reconcile_internal_total_against_provider_amount`
+- `test_events_without_event_id_are_processed_independently`
+- `test_refund_without_event_id_is_ignored`
+- `test_reconcile_reports_both_amount_and_status_mismatches`
+- `test_reconcile_falls_back_when_preferred_amount_is_none`
+- `test_reconcile_rejects_duplicate_internal_order_ids`
+- `test_reconcile_rejects_duplicate_provider_order_ids`
+
+The latest full test-suite run completed with **219 passed in 0.69s**. The recorded demo output after the reconciliation field correction showed `ORD-101` as matched and `ORD-102` as a status mismatch.
+
+## 6. Unresolved challenges and limitations
+
+Events without IDs cannot be reliably deduplicated because there is no unique identifier to track replay. The implementation allows independent non-refund events without IDs but ignores refund events without them.
+
+The complete synthetic event dataset was not replayed end-to-end as a separate test. No formal performance benchmark was conducted, and no performance improvement is claimed.
