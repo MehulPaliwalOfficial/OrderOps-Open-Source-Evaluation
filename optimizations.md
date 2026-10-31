@@ -1,112 +1,136 @@
 # Optimizations Considered and Implemented
 
-## 1. Baseline and objective
+## 1. Objective and baseline
 
-The main opportunities for improvement were in correctness, maintainability, and avoiding unnecessary repeated event processing.
+The changes focused on correctness, maintainability, and predictable handling of events and reconciliation records rather than on unmeasured speed improvements.
 
-During investigation, several issues were identified:
+Investigation identified these issues:
 
-- Duplicate events could be processed more than once.
-- Events without an `event_id` were incorrectly treated as duplicates because `None` could be stored in the processed event list.
-- Refund processing needed stronger validation to prevent invalid or excessive refunds.
-- Reconciliation used different amount field names for internal and provider records, resulting in incorrect mismatch reports.
+- Identified events needed replay protection.
+- Missing or malformed event IDs needed explicit handling.
+- Unsupported event types should not enter transition processing.
+- Refund processing needed eligibility, amount, and outstanding-balance checks.
+- Payment confirmation should not overwrite an existing non-`UNPAID` payment state.
+- Internal and provider records use different amount-field names.
+- Amount and status mismatches needed independent reporting.
+- Missing or duplicate order IDs could make reconciliation ambiguous.
 
-These findings came from inspecting the implementation, running the supplied tests, and comparing the internal and provider fixtures.
-
-The objective was to make event processing safer, reconciliation more reliable, and the code easier to understand and maintain.
-
-No formal performance baseline was collected.
+No formal performance baseline or profiling run was collected.
 
 ## 2. Options considered
 
-### Option 1: Improve event idempotency
+### Option 1: Improve event idempotency and validation
 
-**Expected benefit:** Prevent the same identified event from being applied repeatedly.
+**Expected benefit:** Prevent replay of identified events and reject unsupported event types or malformed identifiers before changing order state.
 
-**Risk:** Treating all events without IDs as duplicates could incorrectly discard independent events.
+**Trade-off:** Events without IDs cannot be deduplicated by ID.
 
-**Decision:** Implemented. Duplicate checking and recording now apply only when an event ID is present.
+**Decision:** Implemented. Supported event types are allow-listed; empty, whitespace-only, and non-string non-None IDs are rejected. Identified event IDs are checked and recorded. Missing IDs are not added to the processed-ID list.
 
-### Option 2: Add stronger refund validation
+### Option 2: Require IDs for refund events
 
-**Expected benefit:** Prevent invalid refunds, refunds exceeding the outstanding amount, and refunds on ineligible orders.
+**Expected benefit:** Avoid applying a financial refund event that cannot be reliably protected against replay.
 
-**Risk:** Additional conditions make the refund-processing logic slightly longer.
+**Trade-off:** A refund event without an ID is ignored, even if its amount and order would otherwise be eligible.
 
-**Decision:** Implemented. Refunds now require an eligible order, a valid positive integer amount, an outstanding refund balance, and an event ID.
+**Decision:** Implemented. Non-refund events without IDs can still be processed independently; refund events without IDs are ignored.
 
-### Option 3: Standardize reconciliation amount fields
+### Option 3: Strengthen refund validation
 
-**Expected benefit:** Compare internal and provider amounts correctly despite differences in their field names.
+**Expected benefit:** Prevent invalid refunds, refunds on ineligible orders, and refunds greater than the remaining due amount.
 
-**Risk:** Supporting multiple field names introduces fallback logic that must remain understandable.
+**Trade-off:** Additional validation conditions make the refund branch more explicit.
 
-**Decision:** Implemented. Internal records use `total_paise` with an `amount_paise` fallback, while provider records use `amount_paise` with a `total_paise` fallback.
+**Decision:** Implemented. Refunds require an eligible paid rejected/cancelled order, a positive outstanding balance, a positive integer amount no greater than that balance, and an event ID. Payment status changes to `REFUNDED` only when the full due amount is reached.
 
-### Option 4: Introduce a more complex event-processing architecture
+### Option 4: Make reconciliation field selection resilient
 
-**Expected benefit:** A dedicated event-processing pipeline could make future event types easier to organize and extend.
+**Expected benefit:** Compare internal and provider amounts correctly despite their different field names and handle a preferred field whose value is `None`.
 
-**Risk:** It would add abstraction and complexity to a relatively small service.
+**Trade-off:** Supporting alternate field names adds fallback logic.
 
-**Decision:** Not implemented. The existing function-based structure was sufficient for the current requirements.
+**Decision:** Implemented. Internal records prefer `total_paise` and fall back to `amount_paise`; provider records prefer `amount_paise` and fall back to `total_paise`.
 
-### Option 5: Introduce caching or additional data structures
+### Option 5: Report reconciliation mismatches independently
 
-**Expected benefit:** Could reduce repeated lookups or processing if the dataset became significantly larger.
+**Expected benefit:** Avoid hiding a status mismatch when an amount mismatch also exists.
 
-**Risk:** Additional memory usage and synchronization complexity without evidence that the current implementation needs them.
+**Trade-off:** An order can appear in both mismatch categories.
 
-**Decision:** Not implemented. No profiling evidence justified introducing caching or more complex structures.
+**Decision:** Implemented. Amount and status are compared separately. An order is marked matched only if both agree.
+
+### Option 6: Validate reconciliation identifiers
+
+**Expected benefit:** Avoid silently overwriting duplicate records when constructing dictionaries and reject records that cannot be associated reliably.
+
+**Trade-off:** Missing or duplicate order IDs now raise `ValueError`.
+
+**Decision:** Implemented for both internal and provider inputs.
+
+### Option 7: Introduce caching or a more complex event architecture
+
+**Expected benefit:** Could help at larger scale or with more event types.
+
+**Trade-off:** Adds memory, synchronization, or abstraction complexity without measured evidence that the current project needs it.
+
+**Decision:** Not implemented. The existing function-based structure is sufficient for the current scope.
 
 ## 3. Changes implemented
 
-### A. Duplicate event protection
+### A. Event processing
 
-- **Change:** Added an event ID check before processing and recorded IDs only when they are present.
-- **Reason:** Prevent repeated processing of identified events without treating unrelated events with missing IDs as duplicates.
-- **Tests used:** `test_payment_event_replay_idempotent` and `test_events_without_event_id_are_processed_independently`.
-- **Measurement:** No performance benchmark was conducted.
+- Validated event types against the supported event list.
+- Rejected empty, whitespace-only, and non-string non-None event IDs.
+- Checked identified events against the processed-ID list.
+- Avoided storing missing IDs or treating multiple missing IDs as duplicates.
+- Ignored refund events without IDs.
+- Limited payment confirmation to orders currently marked `UNPAID`.
 
-### B. Refund validation
+### B. Refund safety
 
-- **Change:** Added eligibility, amount-type, positive-amount, outstanding-balance, and event-ID checks.
-- **Reason:** Protect refund processing against invalid or repeated financial operations.
-- **Tests used:** `test_valid_partial_and_full_refunds`, `test_invalid_refund_amounts_are_ignored`, `test_refund_eligibility_matrix`, `test_refunds_cannot_exceed_due`, and `test_refund_without_event_id_is_ignored`.
-- **Measurement:** No performance benchmark was conducted.
+- Checked order status and payment status eligibility.
+- Required a positive integer refund amount.
+- Checked the outstanding refund balance before accepting another refund.
+- Kept payment status as `PAID` for partial refunds and changed it to `REFUNDED` only when the full due amount was reached.
 
-### C. Reconciliation field handling
+### C. Reconciliation
 
-- **Change:** Added explicit fallback handling for the different internal and provider amount field names.
-- **Reason:** Avoid reporting false amount mismatches when the underlying values are equal.
-- **Tests used:** `test_reconcile_internal_total_against_provider_amount` and the existing reconciliation tests.
-- **Measurement:** No timing or memory comparison was conducted.
+- Added fallback handling for internal/provider amount field names when the preferred value is `None`.
+- Reported amount and status mismatches independently.
+- Added explicit missing/duplicate order-ID validation.
 
-The complete test suite passed with **215 tests passing** in the latest recorded run. This verifies correctness against the available tests, not a measured performance improvement.
+## 4. Regression coverage
 
-## 4. Trade-offs
+Seven tests were added to `tests/test_contract.py`:
+
+- `test_reconcile_internal_total_against_provider_amount`
+- `test_events_without_event_id_are_processed_independently`
+- `test_refund_without_event_id_is_ignored`
+- `test_reconcile_reports_both_amount_and_status_mismatches`
+- `test_reconcile_falls_back_when_preferred_amount_is_none`
+- `test_reconcile_rejects_duplicate_internal_order_ids`
+- `test_reconcile_rejects_duplicate_provider_order_ids`
+
+The latest full test-suite run completed with **219 passed in 0.69s** using `python -m pytest -q`.
+
+## 5. Trade-offs and measurements
 
 The implemented changes prioritize correctness and predictable behaviour over performance claims.
 
-- **Idempotency:** Events with IDs can be checked for duplicates. Events without IDs cannot be reliably deduplicated, so they are not added to the processed ID list.
-- **Refund safety:** Additional validation makes the logic more explicit but introduces more conditions to maintain.
-- **Reconciliation:** Supporting alternative field names improves compatibility with the supplied records, although it requires clear field-selection logic.
-- **Simplicity:** More complex architectures, caching, and premature optimization were avoided because the current dataset and requirements did not demonstrate a need for them.
+- **Idempotency:** Identified events can be checked for replay. Events without IDs cannot be reliably deduplicated.
+- **Refund safety:** Additional checks make financial state transitions more restrictive and explicit.
+- **Reconciliation:** Alternative field names improve compatibility with the supplied records, while independent mismatch lists preserve both findings.
+- **Identifier validation:** Rejecting missing or duplicate order IDs prevents ambiguous reconciliation rather than silently choosing one record.
+- **Simplicity:** Caching and larger architectural changes were avoided because no profiling evidence justified them.
 
-No speedup, memory reduction, or time-complexity improvement is claimed.
+No speedup, memory reduction, or time-complexity improvement is claimed. The reported test duration is a test-run observation, not a benchmark.
 
-## 5. Further improvements
+## 6. Further improvements
 
-With more time, I would consider the following improvements:
+With more time, possible next steps include:
 
-1. **Input validation:** Validate incoming event structures and required fields before processing. This would make the service more predictable when handling malformed or incomplete data.
-
-2. **Larger dataset testing:** Test reconciliation and event processing with substantially larger synthetic datasets to identify potential bottlenecks.
-
-3. **Performance profiling:** Measure execution time and memory usage before considering caching, indexing, or alternative data structures.
-
-4. **Improved event traceability:** Introduce structured processing results or logs so that ignored, invalid, duplicate, and successfully processed events can be investigated more easily.
-
-5. **Additional edge-case tests:** Cover empty event IDs, missing amount fields, duplicate order IDs, and other malformed input scenarios.
-
-Any future optimization would be implemented only when supported by measurable evidence, with regression tests protecting existing behaviour.
+1. Validate complete event and record schemas at ingestion.
+2. Add a dedicated regression test for missing order IDs in both reconciliation inputs.
+3. Replay the complete synthetic event dataset as a separate end-to-end verification.
+4. Profile larger synthetic datasets before considering indexing or caching.
+5. Add structured results or logs to distinguish ignored, invalid, duplicate, and successfully processed events.
