@@ -13,6 +13,7 @@ def apply_order_event(order: dict, event: dict) -> dict:
     out.setdefault("refund_due_paise",0)
     out.setdefault("refunded_paise",0)
     out.setdefault("processed_event_ids",[])
+    # Read the event identity and type before changing the order.
     event_id=event.get("event_id")
     if event_id == "":
         return out
@@ -27,19 +28,21 @@ def apply_order_event(order: dict, event: dict) -> dict:
         "refund_processed",
     }
 
+    # Ignore unsupported event types so unknown events cannot change state.
     if kind not in valid_event_types:
         return out
 
+    # A supplied event ID must be a non-empty string.
     if event_id is not None and (
         not isinstance(event_id, str) or not event_id.strip()
     ):
         return out
 
+    # Process each identified event only once.
     if event_id in out["processed_event_ids"]:
         return out
 
-    # Deliberate starter defects: duplicate and invalid refund events are not
-    # fully protected, and some transitions need tighter validation.
+    # Apply only valid transitions from the order's current state.
     if kind == "payment_confirmed" and out.get("payment_status") == "UNPAID":
         out["payment_status"] = "PAID"
     elif kind=="restaurant_accepted" and out.get("status")=="PLACED":
@@ -56,17 +59,20 @@ def apply_order_event(order: dict, event: dict) -> dict:
         out["status"]="OUT_FOR_DELIVERY"
     elif kind=="order_delivered" and out.get("status")=="OUT_FOR_DELIVERY":
         out["status"]="DELIVERED"
+    # Refunds need an ID so they can be tracked and protected from duplicates.
     elif kind == "refund_processed" and event_id is not None:
         amount = event.get("amount_paise")
         refund_due = out.get("refund_due_paise", 0)
         already_refunded = out.get("refunded_paise", 0)
 
+        # Refund only rejected/cancelled, paid orders with money still due.
         eligible = (
             out.get("status") in ("REJECTED", "CANCELLED")
             and out.get("payment_status") == "PAID"
             and out.get("refund_due_paise", 0) > out.get("refunded_paise", 0)
         )
 
+        # Accept only a positive integer amount within the remaining refund.
         valid_amount = (
             type(amount) is int
             and amount > 0
@@ -79,9 +85,11 @@ def apply_order_event(order: dict, event: dict) -> dict:
         if eligible and valid_amount:
             out["refunded_paise"] = already_refunded + amount
 
+            # Mark payment refunded only when the full due amount is returned.
             if out["refunded_paise"] == refund_due:
                 out["payment_status"] = "REFUNDED"
 
+    # Record identified events so later duplicates can be ignored.
     if event_id is not None:
         out["processed_event_ids"].append(event_id)
 
@@ -91,6 +99,7 @@ def apply_order_event(order: dict, event: dict) -> dict:
 
 def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
     """Compare internal and provider transaction summaries by order_id."""
+    # Validate IDs before building lookup maps; each order must be unambiguous.
     internal_ids = [r.get("order_id") for r in internal]
     provider_ids = [r.get("order_id") for r in provider]
 
@@ -103,6 +112,7 @@ def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
         raise ValueError("Missing order_id in internal records")
     if any(not r.get("order_id") for r in provider):
         raise ValueError("Missing order_id in provider records")
+    # Index both sources by order ID so corresponding records can be compared.
     left = {r.get("order_id"): r for r in internal}
     right = {r.get("order_id"): r for r in provider}
 
@@ -124,6 +134,7 @@ def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
         else:
             a, b = left[key], right[key]
 
+            # Use primary amount fields, falling back when a value is None.
             internal_amount = a.get("total_paise")
             if internal_amount is None:
                 internal_amount = a.get("amount_paise")
@@ -132,6 +143,7 @@ def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
             if provider_amount is None:
                 provider_amount = b.get("total_paise")
 
+            # Check amount and status separately so both problems are reported.
             amount_mismatch = internal_amount != provider_amount
             status_mismatch = a.get("status") != b.get("status")
 
@@ -141,6 +153,7 @@ def reconcile_orders(internal: list[dict], provider: list[dict]) -> dict:
             if status_mismatch:
                 report["status_mismatches"].append(key)
 
+            # Match only when both amount and status agree.
             if not amount_mismatch and not status_mismatch:
                 report["matched"].append(key)
 
