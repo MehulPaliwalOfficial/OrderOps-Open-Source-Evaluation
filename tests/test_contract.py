@@ -1,3 +1,4 @@
+import pytest
 from models import new_order
 from service import apply_order_event, reconcile_orders
 
@@ -133,3 +134,71 @@ def test_refund_without_event_id_is_ignored():
     assert result["refunded_paise"] == 0
     assert result["payment_status"] == "PAID"
     assert result["processed_event_ids"] == []
+
+def test_reconcile_reports_both_amount_and_status_mismatches():
+    internal = [
+        {
+            "order_id": "ORD-105",
+            "total_paise": 15000,
+            "status": "DELIVERED",
+        }
+    ]
+
+    provider = [
+        {
+            "order_id": "ORD-105",
+            "amount_paise": 12000,
+            "status": "CANCELLED",
+        }
+    ]
+
+    result = reconcile_orders(internal, provider)
+
+    assert result["amount_mismatches"] == ["ORD-105"]
+    assert result["status_mismatches"] == ["ORD-105"]
+    assert result["matched"] == []
+
+def test_reconcile_falls_back_when_preferred_amount_is_none():
+    internal = [
+        {
+            "order_id": "ORD-106",
+            "total_paise": None,
+            "amount_paise": 15000,
+            "status": "PLACED",
+        }
+    ]
+
+    provider = [
+        {
+            "order_id": "ORD-106",
+            "amount_paise": 15000,
+            "status": "PLACED",
+        }
+    ]
+
+    result = reconcile_orders(internal, provider)
+
+    assert result["matched"] == ["ORD-106"]
+    assert result["amount_mismatches"] == []
+
+import pytest
+
+
+def test_reconcile_rejects_duplicate_internal_order_ids():
+    internal = [
+        {"order_id": "ORD-1", "total_paise": 1000, "status": "PLACED"},
+        {"order_id": "ORD-1", "total_paise": 2000, "status": "PLACED"},
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate order_id in internal records"):
+        reconcile_orders(internal, [])
+
+
+def test_reconcile_rejects_duplicate_provider_order_ids():
+    provider = [
+        {"order_id": "ORD-1", "amount_paise": 1000, "status": "PLACED"},
+        {"order_id": "ORD-1", "amount_paise": 2000, "status": "PLACED"},
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate order_id in provider records"):
+        reconcile_orders([], provider)
